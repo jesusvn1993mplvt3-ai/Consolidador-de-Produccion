@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generador de Papeletas - Cirineo</title>
     
-    <!-- Icono -->
     <link rel="icon" href="https://raw.githubusercontent.com/jesusvn1993mplvt3-ai/CIRINEO/refs/heads/main/icon.ico">
     
-    <!-- Librerías Externas (React, Firebase, Tailwind, Lucide, JsBarcode) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -16,11 +14,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
 
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-    <!-- Fuentes para la etiqueta -->
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
@@ -38,11 +34,11 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 5px 15px -2px rgba(0, 0, 0, 0.1); /* Sombra más sutil para múltiples etiquetas */
+            box-shadow: 0 5px 15px -2px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s;
         }
 
-        /* Estilos internos de la etiqueta (Copiados del diseño anterior) */
+        /* Estilos internos de la etiqueta */
         .lbl-row { display: flex; border-bottom: 2px solid #000; width: 100%; }
         .lbl-row:last-child { border-bottom: none; }
         .lbl-col { border-right: 2px solid #000; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
@@ -69,8 +65,8 @@
 
             /* Contenedor principal para impresión, oculta elementos de la pantalla */
             .print-container {
-                display: block; /* Muestra el contenedor de impresión */
-                overflow: visible !important; /* Permite que los elementos se impriman fuera de la vista de pantalla */
+                display: block;
+                overflow: visible !important;
                 width: auto;
                 height: auto;
                 padding: 0;
@@ -83,7 +79,7 @@
                 padding: 0 !important;
                 width: 6in;
                 height: 4in;
-                page-break-after: always; /* Salto de página después de cada etiqueta */
+                page-break-after: always;
                 box-shadow: none !important;
             }
 
@@ -106,8 +102,6 @@
         const { useState, useEffect, useRef, useMemo } = React;
 
         // --- CONFIGURACIÓN DE FIREBASE ---
-        // Utiliza variables globales si están disponibles, sino usa la configuración estática
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = {
             apiKey: "AIzaSyBqHgV4vDat1-VmZfKbiPg7nuiX-ROcexw",
             authDomain: "cirineo-cec21.firebaseapp.com",
@@ -122,7 +116,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- COMPONENTE ICONO (FIXED: Usa useRef y useEffect para inyectar SVG directamente) ---
+        // --- COMPONENTE ICONO ---
         const Icon = ({ name, size = 18, className }) => {
             const containerRef = useRef(null);
 
@@ -142,7 +136,6 @@
         };
 
         // --- COMPONENTE DE ETIQUETA (VISUAL) ---
-        // Ahora acepta 'labelData' que incluye información específica del paquete
         const ProductionLabel = ({ labelData }) => {
             const svgRef = useRef(null);
             
@@ -150,16 +143,16 @@
             const order = labelData; 
             const subPiece = order.subPiecesData && order.subPiecesData.length > 0 ? order.subPiecesData[0] : {};
             
-            // Lógica de hilos (se mantiene)
+            // Lógica de hilos
             const materialNylon = order.threading ? order.threading.find(t => t.material && t.material.toUpperCase().includes('NYLON')) : null;
             const materialLycra = order.threading ? order.threading.find(t => t.material && t.material.toUpperCase().includes('LYCRA')) : null;
             const lycraText = materialLycra ? materialLycra.material.replace(/LYCRA/i, '').trim() : (order.threading && order.threading[1] ? order.threading[1].material : 'N/A');
             const nylonText = materialNylon ? materialNylon.material.replace(/NYLON/i, '').trim() : (order.threading && order.threading[0] ? order.threading[0].material : 'N/A');
             
-            // Datos específicos del paquete (nuevos campos)
-            const currentPackageDisplay = order.displayPackageId || '1/1'; // e.g., 1/6
+            // Datos específicos del paquete
+            const currentPackageDisplay = order.displayPackageId || '1/1';
             const piecesInPackage = order.piecesInPackage || (order.packageSize === 'VARIO' ? 'VAR' : (order.packageSize || 50));
-            const barcodeValue = order.packageCode || `${order.partida}-${order.codigo}`; // e.g., DIC25_02-M024-1-6
+            const barcodeValue = order.packageCode || `${order.partida}-${order.codigo}`;
 
             // Generar Código de Barras cuando cambie la orden
             useEffect(() => {
@@ -214,15 +207,15 @@
                         </div>
                     </div>
 
-                    {/* FILA 4: METRICAS CENTRALES - AHORA MUESTRA PAQUETE ACTUAL Y PIEZAS EN ESTE PAQUETE */}
+                    {/* FILA 4: METRICAS CENTRALES */}
                     <div className="lbl-row row-metrics">
                         <div className="lbl-col" style={{width: '33.33%', textAlign: 'center'}}>
                             <div className="lbl-title" style={{fontSize: '11px'}}>PAQUETE<br/>ACTUAL</div>
-                            <div className="lbl-big" style={{fontSize: '48px'}}>{currentPackageDisplay}</div> {/* Muestra 1/N, 2/N, etc. */}
+                            <div className="lbl-big" style={{fontSize: '48px'}}>{currentPackageDisplay}</div>
                         </div>
                         <div className="lbl-col" style={{width: '33.33%', backgroundColor: '#e0e0e0', textAlign: 'center'}}>
                             <div className="lbl-title" style={{fontSize: '11px'}}>PIEZAS EN<br/>PAQUETE</div>
-                            <div className="lbl-big" style={{fontSize: '48px'}}>{piecesInPackage}</div> {/* Piezas específicas en este paquete */}
+                            <div className="lbl-big" style={{fontSize: '48px'}}>{piecesInPackage}</div>
                         </div>
                         <div className="lbl-col" style={{width: '33.33%', textAlign: 'center'}}>
                             <div className="lbl-title">MAQUINA</div>
@@ -283,7 +276,7 @@
             const [loading, setLoading] = useState(true);
             const [filterText, setFilterText] = useState('');
 
-            // Función para generar los datos de las papeletas por paquete
+            // Función para generar los datos de las papeletas por paquete (¡MODIFICADA!)
             const generatePackageLabels = (order) => {
                 const totalPieces = order.totalPedido || 0;
                 // Usar 50 como fallback si no se define packageSize o es 'VARIO'
@@ -297,8 +290,10 @@
                     // Piezas en este paquete
                     const piecesInThisPackage = i < N ? packageSizeValue : (totalPieces % packageSizeValue || packageSizeValue);
                     
-                    // Código de barras único: PARTIDA-CODIGO-PAQUETE_TOTAL (e.g., DIC25_02-M024-1_6)
-                    const packageCode = `${order.partida}-${order.codigo}-${i}_${N}`;
+                    // --- CÓDIGO CLAVE MODIFICADO ---
+                    // Formato del Barcode: ID_ORDEN-PARTIDA-CODIGO-PAQUETE_TOTAL|INDICE_ARRAY
+                    const arrayIndex = i - 1;
+                    const packageCode = `${order.id}-${order.partida}-${order.codigo}-${i}_${N}|${arrayIndex}`;
 
                     labels.push({
                         ...order,
@@ -306,7 +301,7 @@
                         packageIndex: i, 
                         totalPackages: N, 
                         piecesInPackage: piecesInThisPackage,
-                        packageCode: packageCode, 
+                        packageCode: packageCode, // Este es el código único que ahora incluye el ID y el índice.
                         displayPackageId: `${i}/${N}`, 
                     });
                 }
@@ -359,15 +354,13 @@
             const handleArchive = async () => {
                 if(!selectedOrder) return;
                 
-                // Reemplazando window.confirm con un modal simple (usando confirm por ahora, pero debe ser un componente)
                 if(window.confirm(`¿Estás seguro de que ya imprimiste todas las ${packageLabels.length} papeletas para ${selectedOrder.codigo}?\n\nLa orden se marcará como ARCHIVADA y desaparecerá de esta lista.`)) {
                     try {
                         await db.collection('orders').doc(String(selectedOrder.id)).update({
                             status: 'ARCHIVADO',
                             printDate: new Date().toISOString()
                         });
-                        setSelectedOrder(null); // Limpiar selección
-                        // Usamos alert temporalmente
+                        setSelectedOrder(null);
                         window.alert("Orden archivada correctamente.");
                     } catch (error) {
                         window.alert("Error al archivar: " + error.message);
@@ -468,7 +461,6 @@
                         </div>
 
                         {/* CONTENEDOR CENTRAL DE PAPELETAS (SCROLLABLE) */}
-                        {/* Clase 'print-container' envuelve las etiquetas para la impresión */}
                         <div className="flex-grow flex flex-col items-center p-10 bg-slate-200 overflow-y-auto print-container">
                             {packageLabels.length > 0 ? (
                                 packageLabels.map((labelData, index) => (
