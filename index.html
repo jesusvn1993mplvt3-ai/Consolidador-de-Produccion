@@ -116,20 +116,21 @@
             
             const currentPackageDisplay = order.displayPackageId || '1/1';
             const piecesInPackage = order.piecesInPackage || (order.packageSize === 'VARIO' ? 'VAR' : (order.packageSize || 50));
-            const barcodeValue = order.packageCode || `${order.partida}-${order.codigo}`;
+            // Aseguramos que el código siempre tenga el formato correcto para el escáner
+            const barcodeValue = order.packageCode || `${order.id}-${order.partida}-${order.codigo}-1_1|0`; 
             const fechaEntrega = order.fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX');
 
-            // --- CONFIGURACIÓN OPTIMIZADA DEL CÓDIGO DE BARRAS ---
+            // --- CONFIGURACIÓN OPTIMIZADA DEL CÓDIGO DE BARRAS (VERSIÓN COMPACTA) ---
             useEffect(() => {
                 if (svgRef.current && barcodeValue) {
                     try {
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            width: 0.7,      // REDUCIDO: De 1.38 a 0.7 para hacerlo mucho mas angosto
+                            width: 0.65,     // REDUCIDO: Hace las barras mucho más finas (antes 1.38)
                             height: 45,      
                             displayValue: false,
-                            margin: 0,       // REDUCIDO: De 10 a 0 para quitar espacio blanco lateral
+                            margin: 0,       // REDUCIDO: Elimina márgenes blancos laterales
                             background: "#ffffff"
                         });
                     } catch (e) { console.error("Error barcode", e); }
@@ -251,6 +252,7 @@
                 for (let i = 1; i <= N; i++) {
                     const piecesInThisPackage = i < N ? packageSizeValue : (totalPieces % packageSizeValue || packageSizeValue);
                     const arrayIndex = i - 1;
+                    // Estructura: ID-PARTIDA-CODIGO-PAQ_TOTAL|INDICE
                     const packageCode = `${order.id}-${order.partida}-${order.codigo}-${i}_${N}|${arrayIndex}`;
 
                     labels.push({
