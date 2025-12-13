@@ -56,7 +56,7 @@
         .row-desc { height: 10%; align-items: center; }
         .row-metrics { height: 22%; }
         .row-details { height: 20%; }
-        .row-footer { height: 17%; } /* Footer un poco más alto para el código de barras */
+        .row-footer { height: 17%; } 
 
         /* ESTILOS DE IMPRESIÓN ZEBRA */
         @media print {
@@ -126,10 +126,10 @@
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            width: 2.3,      // Más ancho para mejor lectura
-                            height: 45,      // Más alto para facilitar el escaneo
+                            width: 1.38,      // 60% del ancho anterior (2.3 * 0.60)
+                            height: 45,      
                             displayValue: false,
-                            margin: 10,      // Margen de seguridad (Quiet Zone) IMPORTANTE
+                            margin: 10,
                             background: "#ffffff"
                         });
                     } catch (e) { console.error("Error barcode", e); }
