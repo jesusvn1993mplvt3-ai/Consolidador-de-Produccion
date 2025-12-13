@@ -17,13 +17,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        /* Mismo fondo base que el Generador de Órdenes */
         body { background-color: #f1f5f9; color: #1e293b; font-family: system-ui, -apple-system, sans-serif; }
-        
         .card-enter { animation: slideIn 0.3s ease-out forwards; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Scrollbars oscuros para mantener la estética interna de los contenedores */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #e2e8f0; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -36,7 +32,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- CONFIGURACIÓN FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyBqHgV4vDat1-VmZfKbiPg7nuiX-ROcexw",
             authDomain: "cirineo-cec21.firebaseapp.com",
@@ -50,7 +45,6 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- COMPONENTE ICONO (Idéntico a tus otros archivos) ---
         const Icon = ({ name, size = 18, className }) => {
             const containerRef = React.useRef(null);
             React.useEffect(() => {
@@ -61,7 +55,6 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        // --- TARJETA DE ESCANEO (Estilo similar a "MachineCard" del archivo 2) ---
         const ScanCard = ({ scan, onApprove, onDelete, processing }) => {
             return (
                 <div className="bg-slate-800 border-l-4 border-indigo-500 rounded p-3 mb-3 shadow-lg card-enter flex flex-col gap-2 relative overflow-hidden text-white">
@@ -101,20 +94,19 @@
                             onClick={() => onDelete(scan)}
                             className="bg-slate-700 hover:bg-red-900 hover:text-red-100 text-slate-300 py-2 rounded flex items-center justify-center gap-1 text-xs font-bold transition duration-200"
                         >
-                            <Icon name="x" size={16}/> DESCARTAR
+                            <Icon name="x" size={16}/> ERROR
                         </button>
                         <button 
                             onClick={() => onApprove(scan)}
                             className="bg-green-600 hover:bg-green-500 text-white py-2 rounded flex items-center justify-center gap-1 text-xs font-bold shadow-md transition duration-200 transform hover:scale-[1.02]"
                         >
-                            <Icon name="check" size={16}/> APROBAR
+                            <Icon name="check" size={16}/> VALIDAR
                         </button>
                     </div>
                 </div>
             );
         };
 
-        // --- COLUMNA DE MÁQUINA ---
         const MachineColumn = ({ machineId, scans, onApprove, onDelete, processingId }) => {
             return (
                 <div className="min-w-[320px] max-w-[320px] flex flex-col h-full bg-slate-200/50 border border-slate-300 rounded-lg overflow-hidden shadow-sm">
@@ -152,14 +144,12 @@
             );
         };
 
-        // --- APP PRINCIPAL ---
         const App = () => {
             const [scannedItems, setScannedItems] = useState([]);
             const [orders, setOrders] = useState([]);
             const [processingId, setProcessingId] = useState(null);
             const [lastAction, setLastAction] = useState(null);
 
-            // 1. Cargar Órdenes Activas
             useEffect(() => {
                 const unsubscribe = db.collection('orders')
                     .where('status', '!=', 'ARCHIVADO')
@@ -170,26 +160,25 @@
                 return () => unsubscribe();
             }, []);
 
-            // 2. Cargar Escaneos Pendientes
             useEffect(() => {
+                // FILTRO IMPORTANTE: Solo traemos los que NO están verificados aún
                 const unsubscribe = db.collection('registro_produccion')
                     .orderBy('fecha', 'desc')
                     .onSnapshot(snap => {
                         const data = snap.docs.map(d => ({...d.data(), id: d.id}));
-                        setScannedItems(data);
+                        // Filtramos visualmente los que ya están verificados para no mostrarlos aquí
+                        const pendingData = data.filter(item => item.status !== 'VERIFICADO');
+                        setScannedItems(pendingData);
                     });
                 return () => unsubscribe();
             }, []);
 
-            // 3. Agrupar Escaneos por Máquina
             const machineGroups = useMemo(() => {
                 const groups = {};
                 const noMachine = [];
 
                 scannedItems.forEach(scan => {
-                    // Cruzar información con orden activa para saber la máquina actual
                     const order = orders.find(o => String(o.id) === String(scan.orderId));
-                    
                     if (order && order.maquina) {
                         const mq = order.maquina;
                         if (!groups[mq]) groups[mq] = [];
@@ -200,14 +189,13 @@
                 });
 
                 const sortedKeys = Object.keys(groups).sort((a, b) => parseInt(a) - parseInt(b));
-                
                 return {
                     mapped: sortedKeys.map(k => ({ id: k, items: groups[k] })),
                     unmapped: noMachine
                 };
             }, [scannedItems, orders]);
 
-            // --- SINCRONIZACIÓN (CHECK ✅) ---
+            // --- LÓGICA CLAVE: VALIDAR (SYNC) ---
             const handleApprove = async (scanItem) => {
                 setProcessingId(scanItem.id);
                 try {
@@ -223,19 +211,17 @@
                     const orderData = orderSnap.data();
                     const scanIndex = parseInt(scanItem.paquete_indice);
 
-                    // Buscar y actualizar el paquete específico
                     let packageFound = false;
                     const updatedProgreso = orderData.progreso.map(p => {
-                        // Importante: Asegurar coincidencia de índice
                         if (p.paqueteNum === scanIndex) {
                             packageFound = true;
-                            // Si ya estaba finalizado, solo actualizamos metadatos si es necesario, 
-                            // pero asumimos que queremos sobreescribir con el escaneo.
+                            // GUARDAMOS LA FECHA EXACTA PARA EL HISTORIAL
                             return {
                                 ...p,
                                 finished: true, 
                                 tejedor: scanItem.tejedor, 
-                                fecha: new Date().toISOString().split('T')[0], 
+                                fecha: new Date().toISOString().split('T')[0], // Fecha corta para visualización simple
+                                scanTimestamp: new Date().toISOString(), // TIMESTAMP EXACTO PARA HISTORIAL
                                 lastUpdatedBy: 'Consolidador'
                             };
                         }
@@ -248,11 +234,16 @@
                         return;
                     }
 
-                    // Transacción: Actualizar Orden y Borrar Scan
+                    // 1. Actualizar la Orden
                     await orderDocRef.update({ progreso: updatedProgreso });
-                    await db.collection('registro_produccion').doc(scanItem.id).delete();
+                    
+                    // 2. Actualizar el registro del escáner (NO BORRAR)
+                    await db.collection('registro_produccion').doc(scanItem.id).update({
+                        status: 'VERIFICADO', // Esto lo ocultará de esta pantalla pero lo dejará en la BD
+                        verifiedAt: new Date().toISOString()
+                    });
 
-                    setLastAction({ type: 'success', msg: `Paquete ${scanItem.codigo_paquete} sincronizado.` });
+                    setLastAction({ type: 'success', msg: `Paquete ${scanItem.codigo_paquete} validado.` });
                     setTimeout(() => setLastAction(null), 3000);
 
                 } catch (error) {
@@ -262,14 +253,14 @@
                 setProcessingId(null);
             };
 
-            // --- DESCARTAR (X ❌) ---
+            // --- ELIMINAR REALMENTE (SI FUE UN ERROR DE ESCANEO) ---
             const handleDelete = async (scanItem) => {
-                if(!confirm("¿Descartar este escaneo?")) return;
+                if(!confirm("¿Esto fue un error de escaneo? Se eliminará permanentemente del registro.")) return;
                 
                 setProcessingId(scanItem.id);
                 try {
                     await db.collection('registro_produccion').doc(scanItem.id).delete();
-                    setLastAction({ type: 'deleted', msg: `Escaneo ${scanItem.codigo_paquete} eliminado.` });
+                    setLastAction({ type: 'deleted', msg: `Registro ${scanItem.codigo_paquete} eliminado.` });
                     setTimeout(() => setLastAction(null), 3000);
                 } catch (error) {
                     alert("Error: " + error.message);
@@ -279,8 +270,6 @@
 
             return (
                 <div className="h-screen flex flex-col overflow-hidden bg-slate-100">
-                    
-                    {/* Header */}
                     <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm z-20">
                         <div className="flex items-center gap-3">
                             <div className="bg-slate-900 p-2 rounded-lg text-white shadow-lg">
@@ -288,7 +277,7 @@
                             </div>
                             <div>
                                 <h1 className="text-xl font-black text-slate-800 leading-none tracking-tight">CONSOLIDADOR DE PRODUCCIÓN</h1>
-                                <p className="text-xs text-slate-500 mt-1 font-bold">SINCRONIZACIÓN DE ESCANEOS</p>
+                                <p className="text-xs text-slate-500 mt-1 font-bold">SINCRONIZACIÓN Y VALIDACIÓN</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -299,16 +288,13 @@
                                 </div>
                             )}
                             <div className="bg-slate-200 px-4 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-600 flex items-center gap-2">
-                                TOTAL PENDIENTES <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-sm">{scannedItems.length}</span>
+                                POR VALIDAR <span className="bg-slate-800 text-white px-2 py-0.5 rounded text-sm">{scannedItems.length}</span>
                             </div>
                         </div>
                     </header>
 
-                    {/* Main Board Horizontal Scroll */}
                     <div className="flex-1 overflow-x-auto overflow-y-hidden bg-slate-100 p-4">
                         <div className="h-full flex gap-4 min-w-max">
-                            
-                            {/* Renderizado de Columnas por Máquina */}
                             {machineGroups.mapped.map(group => (
                                 <MachineColumn 
                                     key={group.id} 
@@ -319,8 +305,6 @@
                                     processingId={processingId}
                                 />
                             ))}
-
-                            {/* Columna de Errores / Sin Máquina (Solo aparece si es necesario) */}
                             {machineGroups.unmapped.length > 0 && (
                                 <div className="min-w-[320px] max-w-[320px] flex flex-col h-full bg-red-50 border border-red-200 rounded-lg overflow-hidden">
                                     <div className="p-3 border-b border-red-200 bg-red-100 flex justify-between items-center text-red-800">
@@ -340,24 +324,16 @@
                                     </div>
                                 </div>
                             )}
-
-                            {/* Estado Vacío General */}
                             {scannedItems.length === 0 && (
                                 <div className="w-full h-full absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none">
                                     <div className="bg-white p-8 rounded-full shadow-xl mb-4">
                                         <Icon name="check-check" size={64} className="text-green-500"/>
                                     </div>
-                                    <h2 className="text-2xl font-black text-slate-700">TODO SINCRONIZADO</h2>
-                                    <p className="font-medium">No hay registros de producción pendientes de revisión.</p>
+                                    <h2 className="text-2xl font-black text-slate-700">TODO VALIDADO</h2>
+                                    <p className="font-medium">No hay registros pendientes de revisión.</p>
                                 </div>
                             )}
-
                         </div>
-                    </div>
-                    
-                    {/* Footer simple */}
-                    <div className="bg-white border-t border-slate-200 p-2 text-center text-[10px] text-slate-400 font-mono uppercase">
-                        Sistema Textil Cloud - Módulo Consolidador v1.0
                     </div>
                 </div>
             );
