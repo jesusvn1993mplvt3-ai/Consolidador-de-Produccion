@@ -17,11 +17,13 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
+        /* Mismo fondo base que el Generador de Órdenes */
         body { background-color: #f1f5f9; color: #1e293b; font-family: system-ui, -apple-system, sans-serif; }
         
         .card-enter { animation: slideIn 0.3s ease-out forwards; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
+        /* Scrollbars oscuros para mantener la estética interna de los contenedores */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #e2e8f0; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -48,7 +50,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- COMPONENTE ICONO ---
+        // --- COMPONENTE ICONO (Idéntico a tus otros archivos) ---
         const Icon = ({ name, size = 18, className }) => {
             const containerRef = React.useRef(null);
             React.useEffect(() => {
@@ -59,7 +61,7 @@
             return <span ref={containerRef} className="inline-flex items-center justify-center"></span>;
         };
 
-        // --- TARJETA DE ESCANEO ---
+        // --- TARJETA DE ESCANEO (Estilo similar a "MachineCard" del archivo 2) ---
         const ScanCard = ({ scan, onApprove, onDelete, processing }) => {
             return (
                 <div className="bg-slate-800 border-l-4 border-indigo-500 rounded p-3 mb-3 shadow-lg card-enter flex flex-col gap-2 relative overflow-hidden text-white">
@@ -168,11 +170,9 @@
                 return () => unsubscribe();
             }, []);
 
-            // 2. Cargar Escaneos Pendientes (status: PENDING)
+            // 2. Cargar Escaneos Pendientes
             useEffect(() => {
-                // Ahora filtramos por status 'PENDING'
                 const unsubscribe = db.collection('registro_produccion')
-                    .where('status', '==', 'PENDING') 
                     .orderBy('fecha', 'desc')
                     .onSnapshot(snap => {
                         const data = snap.docs.map(d => ({...d.data(), id: d.id}));
@@ -187,6 +187,7 @@
                 const noMachine = [];
 
                 scannedItems.forEach(scan => {
+                    // Cruzar información con orden activa para saber la máquina actual
                     const order = orders.find(o => String(o.id) === String(scan.orderId));
                     
                     if (order && order.maquina) {
@@ -211,8 +212,6 @@
                 setProcessingId(scanItem.id);
                 try {
                     const orderDocRef = db.collection('orders').doc(String(scanItem.orderId));
-                    const scanDocRef = db.collection('registro_produccion').doc(scanItem.id);
-
                     const orderSnap = await orderDocRef.get();
 
                     if (!orderSnap.exists) {
@@ -224,17 +223,20 @@
                     const orderData = orderSnap.data();
                     const scanIndex = parseInt(scanItem.paquete_indice);
 
+                    // Buscar y actualizar el paquete específico
                     let packageFound = false;
                     const updatedProgreso = orderData.progreso.map(p => {
+                        // Importante: Asegurar coincidencia de índice
                         if (p.paqueteNum === scanIndex) {
                             packageFound = true;
+                            // Si ya estaba finalizado, solo actualizamos metadatos si es necesario, 
+                            // pero asumimos que queremos sobreescribir con el escaneo.
                             return {
                                 ...p,
                                 finished: true, 
                                 tejedor: scanItem.tejedor, 
                                 fecha: new Date().toISOString().split('T')[0], 
-                                lastUpdatedBy: 'Consolidador',
-                                scanRef: scanItem.id // Referencia al escaneo para el historial
+                                lastUpdatedBy: 'Consolidador'
                             };
                         }
                         return p;
@@ -246,39 +248,28 @@
                         return;
                     }
 
-                    // 1. Actualizar la Orden (Generador de Órdenes)
+                    // Transacción: Actualizar Orden y Borrar Scan
                     await orderDocRef.update({ progreso: updatedProgreso });
-                    
-                    // 2. Marcar el Escaneo como sincronizado (NO BORRAR)
-                    await scanDocRef.update({ 
-                        status: 'SYNC',
-                        syncDate: firebase.firestore.FieldValue.serverTimestamp() // Fecha de sincronización
-                    });
+                    await db.collection('registro_produccion').doc(scanItem.id).delete();
 
-
-                    setLastAction({ type: 'success', msg: `Paquete ${scanItem.codigo_paquete} SINCRONIZADO. (Historial guardado)` });
+                    setLastAction({ type: 'success', msg: `Paquete ${scanItem.codigo_paquete} sincronizado.` });
                     setTimeout(() => setLastAction(null), 3000);
 
                 } catch (error) {
                     console.error(error);
-                    alert("Error al sincronizar: " + error.message);
+                    alert("Error: " + error.message);
                 }
                 setProcessingId(null);
             };
 
             // --- DESCARTAR (X ❌) ---
             const handleDelete = async (scanItem) => {
-                if(!confirm("¿Descartar este escaneo? Se marcará como 'DESCARTADO' y se quitará de la lista de pendientes. NO afectará a la orden.")) return;
+                if(!confirm("¿Descartar este escaneo?")) return;
                 
                 setProcessingId(scanItem.id);
                 try {
-                    // Marcar como DESCARTADO
-                    await db.collection('registro_produccion').doc(scanItem.id).update({
-                        status: 'DISCARDED',
-                        discardDate: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    setLastAction({ type: 'deleted', msg: `Escaneo ${scanItem.codigo_paquete} DESCARTADO.` });
+                    await db.collection('registro_produccion').doc(scanItem.id).delete();
+                    setLastAction({ type: 'deleted', msg: `Escaneo ${scanItem.codigo_paquete} eliminado.` });
                     setTimeout(() => setLastAction(null), 3000);
                 } catch (error) {
                     alert("Error: " + error.message);
@@ -297,7 +288,7 @@
                             </div>
                             <div>
                                 <h1 className="text-xl font-black text-slate-800 leading-none tracking-tight">CONSOLIDADOR DE PRODUCCIÓN</h1>
-                                <p className="text-xs text-slate-500 mt-1 font-bold">SOLO PENDIENTES DE REVISIÓN (STATUS: PENDING)</p>
+                                <p className="text-xs text-slate-500 mt-1 font-bold">SINCRONIZACIÓN DE ESCANEOS</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -366,7 +357,7 @@
                     
                     {/* Footer simple */}
                     <div className="bg-white border-t border-slate-200 p-2 text-center text-[10px] text-slate-400 font-mono uppercase">
-                        Sistema Textil Cloud - Módulo Consolidador v1.1
+                        Sistema Textil Cloud - Módulo Consolidador v1.0
                     </div>
                 </div>
             );
