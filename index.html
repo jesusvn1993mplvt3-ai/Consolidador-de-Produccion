@@ -116,7 +116,7 @@
             
             const currentPackageDisplay = order.displayPackageId || '1/1';
             const piecesInPackage = order.piecesInPackage || (order.packageSize === 'VARIO' ? 'VAR' : (order.packageSize || 50));
-            // *** Contenido del código de barras simplificado a Order ID y Paquete Index ***
+            // Contenido del código de barras: ID de Orden y Número de Paquete
             const barcodeValue = order.packageCode || `${order.id}-${order.packageIndex}`; 
             const fechaEntrega = order.fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX');
 
@@ -127,8 +127,8 @@
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            // *** ANCHO REDUCIDO AL 50% (1.38 -> 0.69) ***
-                            width: 0.69,      
+                            // *** ANCHO AUMENTADO 80% (0.69 * 1.80 = 1.242) ***
+                            width: 1.242,      
                             height: 45,      
                             displayValue: false,
                             margin: 10,
@@ -253,16 +253,15 @@
                 for (let i = 1; i <= N; i++) {
                     const piecesInThisPackage = i < N ? packageSizeValue : (totalPieces % packageSizeValue || packageSizeValue);
                     
-                    // *** GENERACIÓN DE CÓDIGO SIMPLIFICADO ***
-                    // Solo Order ID y el índice del paquete.
+                    // Generación de Código Simplificado: ID de Orden y Paquete Index
                     const packageCode = `${order.id}-${i}`;
 
                     labels.push({
                         ...order,
-                        packageIndex: i, // Nuevo campo para usar en el código simplificado
+                        packageIndex: i, 
                         totalPackages: N, 
                         piecesInPackage: piecesInThisPackage,
-                        packageCode: packageCode, // Código simple
+                        packageCode: packageCode, 
                         displayPackageId: `${i}/${N}`, 
                     });
                 }
