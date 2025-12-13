@@ -17,69 +17,51 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
-
     <style>
-        /* ESTILOS GENERALES */
-        body { background-color: #f1f5f9; font-family: 'Roboto Condensed', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
         
-        /* CONTENEDOR DE LA ETIQUETA (6in x 4in) */
-        .label-preview-container {
-            width: 6in;
-            height: 4in;
-            background-color: white;
-            position: relative;
-            box-sizing: border-box;
-            border: 2px solid #000;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 5px 15px -2px rgba(0, 0, 0, 0.1); 
-        }
-
-        /* GRILLA INTERNA */
-        .lbl-row { display: flex; border-bottom: 2px solid #000; width: 100%; box-sizing: border-box; }
-        .lbl-row:last-child { border-bottom: none; }
+        body { font-family: 'Roboto', sans-serif; }
         
-        .lbl-col { border-right: 2px solid #000; padding: 2px 6px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; box-sizing: border-box; }
-        .lbl-col:last-child { border-right: none; }
-        
-        /* TIPOGRAFÍA */
-        .lbl-title { font-size: 12px; font-weight: 700; color: #000; text-transform: uppercase; line-height: 1; margin-bottom: 2px; }
-        .lbl-big { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 40px; line-height: 0.9; color: #000; white-space: nowrap; }
-        .lbl-medium { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 24px; line-height: 1; color: #000; white-space: nowrap; }
-        .lbl-small { font-size: 14px; font-weight: 700; color: #000; line-height: 1.1; }
-        
-        /* ALTURAS AJUSTADAS */
-        .row-header { height: 18%; }
-        .row-info { height: 13%; }
-        .row-desc { height: 10%; align-items: center; }
-        .row-metrics { height: 22%; }
-        .row-details { height: 20%; }
-        .row-footer { height: 17%; } 
-
-        /* ESTILOS DE IMPRESIÓN ZEBRA */
+        /* Estilos de impresión */
         @media print {
-            @page { size: 6in 4in landscape; margin: 0mm; }
-            body, html { margin: 0; padding: 0; background-color: white !important; width: 6in; height: 4in; overflow: visible !important; }
-            .no-print, .sidebar, .header-actions { display: none !important; }
-            #root, .main-content { display: block !important; width: 100% !important; height: auto !important; overflow: visible !important; position: static !important; }
-            .print-container { display: block !important; width: 6in !important; padding: 0 !important; margin: 0 !important; background: white !important; overflow: visible !important; }
-            .label-wrapper { margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; width: 6in !important; height: 4in !important; page-break-after: always; position: relative; left: 0; top: 0; }
-            .label-preview-container { border: 2px solid #000 !important; box-shadow: none !important; width: 6in !important; height: 4in !important; transform: none !important; }
-            .label-wrapper:last-child { page-break-after: avoid; }
+            body { 
+                background: none; 
+                margin: 0; 
+                padding: 0;
+            }
+            .no-print { display: none !important; }
+            .print-container { 
+                padding: 0 !important; 
+                margin: 0 !important; 
+                box-shadow: none !important;
+                background: none !important;
+                overflow: visible !important;
+            }
+            .label-wrapper {
+                page-break-after: always;
+                box-shadow: none !important;
+                margin-bottom: 0 !important;
+                padding: 0 !important;
+            }
+            .label-wrapper:last-child {
+                page-break-after: avoid;
+            }
+            .papeleta {
+                border: 1px solid #000;
+                margin: 0;
+            }
         }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
+
 </head>
-<body>
+<body class="bg-slate-50">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        // Acceder a las funciones de React
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-        // CONFIGURACIÓN FIREBASE
+        // --- Configuración de Firebase ---
         const firebaseConfig = {
             apiKey: "AIzaSyBqHgV4vDat1-VmZfKbiPg7nuiX-ROcexw",
             authDomain: "cirineo-cec21.firebaseapp.com",
@@ -89,295 +71,288 @@
             appId: "1:620210618284:web:482bab9bf74650fff18409",
             measurementId: "G-B7YLM78RVW"
         };
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        
+        // Inicializar Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         const db = firebase.firestore();
 
-        // ICONOS
-        const Icon = ({ name, size = 18, className }) => {
-            const containerRef = useRef(null);
+        // --- Componentes de Interfaz y Lógica ---
+
+        // Iconos de Lucide
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const [iconHtml, setIconHtml] = useState(null);
+            
             useEffect(() => {
-                if (containerRef.current && lucide.icons[name]) {
-                    containerRef.current.innerHTML = lucide.icons[name].toSvg({ width: size, height: size, class: className });
+                const iconFn = lucide.icons[name];
+                if (iconFn) {
+                    const attributes = {
+                        width: size,
+                        height: size,
+                        class: className,
+                        stroke: "currentColor",
+                        strokeWidth: "2",
+                        strokeLinecap: "round",
+                        strokeLinejoin: "round",
+                    };
+                    setIconHtml(iconFn(attributes));
                 }
             }, [name, size, className]);
-            return <div ref={containerRef} className="inline-block" style={{ width: size, height: size }}></div>;
+
+            if (!iconHtml) return null;
+            return <div dangerouslySetInnerHTML={{ __html: iconHtml }} />;
         };
 
-        // ETIQUETA
+        // Componente de Etiqueta de Producción (Papeleta)
         const ProductionLabel = ({ labelData }) => {
             const svgRef = useRef(null);
-            
-            const order = labelData; 
-            const subPiece = order.subPiecesData && order.subPiecesData.length > 0 ? order.subPiecesData[0] : {};
-            const materialNylon = order.threading ? order.threading.find(t => t.material && t.material.toUpperCase().includes('NYLON')) : null;
-            const materialLycra = order.threading ? order.threading.find(t => t.material && t.material.toUpperCase().includes('LYCRA')) : null;
-            const lycraText = materialLycra ? materialLycra.material.replace(/LYCRA/i, '').trim() : (order.threading && order.threading[1] ? order.threading[1].material : 'N/A');
-            const nylonText = materialNylon ? materialNylon.material.replace(/NYLON/i, '').trim() : (order.threading && order.threading[0] ? order.threading[0].material : 'N/A');
-            
-            const currentPackageDisplay = order.displayPackageId || '1/1';
-            const piecesInPackage = order.piecesInPackage || (order.packageSize === 'VARIO' ? 'VAR' : (order.packageSize || 50));
-            // Aseguramos que el código siempre tenga el formato correcto para el escáner
-            const barcodeValue = order.packageCode || `${order.id}-${order.partida}-${order.codigo}-1_1|0`; 
-            const fechaEntrega = order.fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX');
 
-            // --- CONFIGURACIÓN OPTIMIZADA DEL CÓDIGO DE BARRAS (VERSIÓN COMPACTA) ---
+            const order = labelData;
+            const pkgInfo = order.pkgInfo || {};
+            
+            // ************ CORRECCIÓN CLAVE ************
+            // El Santoni.html espera el formato ORDER_ID-PACKAGE_ID
+            // Aseguramos que la orden tenga su ID (order.id) y el ID de paquete (order.pkgId)
+            const barcodeValue = `${order.id}-${order.pkgId}`;
+            // *******************************************
+
+            const formatTimestamp = (timestamp) => {
+                if (!timestamp) return 'N/A';
+                // Asumiendo que el timestamp es un objeto de Firebase Firestore
+                const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+                return date.toLocaleDateString('es-MX', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                });
+            };
+
             useEffect(() => {
                 if (svgRef.current && barcodeValue) {
                     try {
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            width: 0.65,     // REDUCIDO: Hace las barras mucho más finas (antes 1.38)
-                            height: 45,      
-                            displayValue: false,
-                            margin: 0,       // REDUCIDO: Elimina márgenes blancos laterales
-                            background: "#ffffff"
+                            width: 2,
+                            height: 40,
+                            displayValue: false, // El valor legible puede ir aparte
+                            margin: 0
                         });
-                    } catch (e) { console.error("Error barcode", e); }
+                    } catch (e) {
+                        console.error("Error al generar código de barras", e);
+                    }
                 }
             }, [barcodeValue]);
+            
+            const totalCajas = pkgInfo.cajas && pkgInfo.cajas > 0 ? pkgInfo.cajas : 1;
 
             return (
-                <div className="label-preview-container">
-                    {/* F1: MODELO | TOTAL */}
-                    <div className="lbl-row row-header">
-                        <div className="lbl-col" style={{width: '60%'}}>
-                            <div className="lbl-title">MODELO</div>
-                            <div className="lbl-big">{order.codigo || 'S/N'}</div>
-                        </div>
-                        <div className="lbl-col" style={{width: '40%'}}>
-                            <div className="lbl-title">TOTAL PEDIDO</div>
-                            <div className="lbl-big">{order.totalPedido || 0}</div>
-                        </div>
-                    </div>
-
-                    {/* F2: PARTIDA | CLIENTE */}
-                    <div className="lbl-row row-info">
-                        <div className="lbl-col" style={{width: '50%'}}>
-                            <div className="lbl-title">PARTIDA</div>
-                            <div className="lbl-medium">{order.partida || '---'}</div>
-                        </div>
-                        <div className="lbl-col" style={{width: '50%'}}>
-                            <div className="lbl-title">CLIENTE</div>
-                            <div className="lbl-medium" style={{fontSize: order.cliente?.length > 10 ? '20px' : '24px'}}>{order.cliente || '---'}</div>
-                        </div>
-                    </div>
-
-                    {/* F3: DESCRIPCION */}
-                    <div className="lbl-row row-desc">
-                        <div className="lbl-col" style={{flexDirection: 'row', alignItems: 'center', gap: '8px', width: '100%'}}>
-                            <span className="lbl-title">DESC:</span>
-                            <span style={{fontSize: '18px', fontWeight: 'bold'}}>{subPiece.pieza || 'ESTANDAR'}</span>
-                        </div>
-                    </div>
-
-                    {/* F4: METRICAS */}
-                    <div className="lbl-row row-metrics">
-                        <div className="lbl-col" style={{width: '33.33%', textAlign: 'center'}}>
-                            <div className="lbl-title">PAQUETE</div>
-                            <div className="lbl-big" style={{fontSize: '42px'}}>{currentPackageDisplay}</div>
-                        </div>
-                        <div className="lbl-col" style={{width: '33.33%', backgroundColor: '#000', color: '#fff', textAlign: 'center'}}>
-                            <div className="lbl-title" style={{color: '#fff'}}>PZS PAQ.</div>
-                            <div className="lbl-big" style={{fontSize: '42px', color: '#fff'}}>{piecesInPackage}</div>
-                        </div>
-                        <div className="lbl-col" style={{width: '33.33%', textAlign: 'center'}}>
-                            <div className="lbl-title">MAQUINA</div>
-                            <div className="lbl-big" style={{fontSize: '42px'}}>{order.maquina || '0'}</div>
-                        </div>
-                    </div>
-
-                    {/* F5: MATERIALES */}
-                    <div className="lbl-row row-details">
-                        <div style={{width: '50%', display: 'flex', flexDirection: 'column', borderRight: '2px solid black'}}>
-                            <div style={{flex: 1, display: 'flex', alignItems: 'center', borderBottom: '1px solid black', padding: '0 4px'}}>
-                                <span className="lbl-title" style={{width: '45px'}}>NYLON</span>
-                                <span className="lbl-small" style={{fontSize: '13px'}}>{nylonText.substring(0, 20)}</span>
-                            </div>
-                            <div style={{flex: 1, display: 'flex', alignItems: 'center', padding: '0 4px'}}>
-                                <span className="lbl-title" style={{width: '45px'}}>LYCRA</span>
-                                <span className="lbl-small" style={{fontSize: '13px'}}>{lycraText.substring(0, 20)}</span>
-                            </div>
-                        </div>
-                        <div style={{width: '50%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr'}}>
-                            <div className="lbl-col" style={{borderBottom: '1px solid black', borderRight: '1px solid black', padding: '2px'}}>
-                                <div className="lbl-title">TALLA</div>
-                                <div className="lbl-medium" style={{fontSize: '18px'}}>{subPiece.talla || 'UNI'}</div>
-                            </div>
-                            <div className="lbl-col" style={{borderBottom: '1px solid black', padding: '2px'}}>
-                                <div className="lbl-title">PESO (g)</div>
-                                <div className="lbl-small">{subPiece.peso || '--'}</div>
-                            </div>
-                            <div className="lbl-col" style={{gridColumn: 'span 2', padding: '2px', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-                                <div className="lbl-title">TIEMPO</div>
-                                <div className="lbl-small" style={{fontSize: '18px'}}>{subPiece.tiempo ? subPiece.tiempo + ' m' : '--'}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* F6: FOOTER CON CÓDIGO DE BARRAS CENTRADO */}
-                    <div className="lbl-row row-footer" style={{padding: '0', alignItems: 'stretch'}}>
+                <div className="papeleta w-[200mm] h-[100mm] flex border border-black text-xs">
+                    
+                    {/* Sección 1: Datos de la Orden (70%) */}
+                    <div className="w-[70%] border-r border-black p-2 flex flex-col justify-between">
                         
-                        {/* Fecha a la izquierda, ancho fijo */}
-                        <div style={{width: '25%', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingLeft: '8px'}}>
-                            <div className="lbl-title">ENTREGA</div>
-                            <div className="lbl-medium" style={{fontSize: '18px'}}>{fechaEntrega}</div>
+                        {/* Cabecera */}
+                        <div>
+                            <div className="flex justify-between items-center border-b border-black pb-1 mb-1">
+                                <h1 className="text-xl font-bold">PAPELETA DE PRODUCCIÓN</h1>
+                                <span className="text-sm font-bold bg-black text-white px-2 py-0.5 rounded">ID: {order.id}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
+                                <div className="font-bold">Cliente: <span className="font-normal">{order.cliente}</span></div>
+                                <div className="font-bold">No. Pedido: <span className="font-normal">{order.noPedido}</span></div>
+                                <div className="font-bold">Modelo: <span className="font-normal">{order.modelo}</span></div>
+                                <div className="font-bold">Color: <span className="font-normal">{order.color}</span></div>
+                                <div className="font-bold">Fecha Pedido: <span className="font-normal">{formatTimestamp(order.fechaPedido)}</span></div>
+                                <div className="font-bold">Fecha Entrega: <span className="font-normal">{formatTimestamp(order.fechaEntrega)}</span></div>
+                            </div>
                         </div>
 
-                        {/* Código de barras en el centro absoluto */}
-                        <div style={{flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'}}>
-                            <svg ref={svgRef} style={{maxWidth: '100%', height: 'auto'}}></svg>
-                            <div style={{fontSize: '10px', fontWeight: 'bold', marginTop: '-5px', fontFamily: 'monospace'}}>{barcodeValue}</div>
+                        {/* Piezas del Paquete */}
+                        <div className="flex-grow pt-2">
+                            <h2 className="text-sm font-bold border-t border-black pt-1 mb-1">DETALLE DEL PAQUETE ({order.paqueteTipo})</h2>
+                            <div className="grid grid-cols-5 gap-1 text-center font-bold text-sm border-b border-black">
+                                <div className="col-span-2">TALLA</div>
+                                <div className="col-span-3">CANTIDAD (Pzs)</div>
+                            </div>
+                            
+                            <div className="max-h-[35mm] overflow-y-hidden">
+                                {order.tallas && Object.entries(order.tallas).map(([talla, cantidad]) => (
+                                    <div key={talla} className="grid grid-cols-5 gap-1 text-center py-0.5">
+                                        <div className="col-span-2">{talla}</div>
+                                        <div className="col-span-3 font-bold text-base">{cantidad}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
+                        {/* Firma y Observaciones */}
+                        <div className="border-t border-black pt-1 mt-2">
+                            <div className="flex justify-between text-xs">
+                                <div className="w-1/2 pr-2">
+                                    <p className="font-bold">OBSERVACIONES:</p>
+                                    <p className="border-b border-dashed border-black h-4"></p>
+                                </div>
+                                <div className="w-1/2 pl-2">
+                                    <p className="font-bold">TEJEDOR (Nombre y Firma):</p>
+                                    <p className="border-b border-dashed border-black h-4"></p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                    
+                    {/* Sección 2: Barcode y Resumen (30%) */}
+                    <div className="w-[30%] p-2 flex flex-col justify-center items-center">
+                        <div className="text-center mb-4">
+                            <div className="text-3xl font-bold mb-1">Paquete: <span className="text-red-600">{pkgInfo.codigoUnico}</span></div>
+                            <div className="text-xl font-bold">Caja <span className="text-red-600">{order.cajaIndex}</span> de <span className="text-red-600">{totalCajas}</span></div>
+                        </div>
+
+                        {/* Código de Barras */}
+                        <div className="flex flex-col items-center">
+                            <svg ref={svgRef} className="w-full"></svg>
+                            <span className="text-xs mt-1 font-mono">{barcodeValue}</span>
+                        </div>
+                        
+                        {/* QR Code o Espacio extra */}
+                        <div className="mt-4 text-center">
+                            <p className="font-bold text-sm">TOTAL PZS EN ESTE PAQUETE:</p>
+                            <p className="text-4xl font-extrabold text-blue-600">{order.totalPzsPaquete}</p>
+                        </div>
+                    </div>
+
                 </div>
             );
         };
+        
+        // Función principal para generar los datos de la papeleta
+        const generatePackageLabels = (selectedOrder) => {
+            if (!selectedOrder || !selectedOrder.progreso) return [];
+            
+            const labels = [];
+            
+            // Si el progreso es un array, se genera una etiqueta por cada paquete/progreso
+            selectedOrder.progreso.forEach((pkg, index) => {
+                // Combina los datos de la orden con los datos específicos del paquete
+                labels.push({
+                    ...selectedOrder,
+                    pkgId: pkg.id, // ID ÚNICO DEL PAQUETE
+                    pkgInfo: pkg,
+                    paqueteTipo: pkg.tipo || 'Mixto',
+                    tallas: pkg.tallas,
+                    totalPzsPaquete: pkg.totalPzs,
+                    cajaIndex: index + 1 // Asume que el progreso está ordenado por caja
+                });
+            });
 
-        // --- APP PRINCIPAL ---
+            return labels;
+        };
+        
+        // Componente Principal de la Aplicación
         const App = () => {
             const [orders, setOrders] = useState([]);
-            const [selectedOrder, setSelectedOrder] = useState(null);
-            const [packageLabels, setPackageLabels] = useState([]);
+            const [selectedOrderId, setSelectedOrderId] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [filterText, setFilterText] = useState('');
 
-            const generatePackageLabels = (order) => {
-                const totalPieces = order.totalPedido || 0;
-                const packageSizeValue = order.packageSize === 'VARIO' || !order.packageSize ? 50 : (Number(order.packageSize) || 50); 
-                const N = totalPieces > 0 ? Math.ceil(totalPieces / packageSizeValue) : 1; 
-
-                const labels = [];
-                for (let i = 1; i <= N; i++) {
-                    const piecesInThisPackage = i < N ? packageSizeValue : (totalPieces % packageSizeValue || packageSizeValue);
-                    const arrayIndex = i - 1;
-                    // Estructura: ID-PARTIDA-CODIGO-PAQ_TOTAL|INDICE
-                    const packageCode = `${order.id}-${order.partida}-${order.codigo}-${i}_${N}|${arrayIndex}`;
-
-                    labels.push({
-                        ...order,
-                        packageIndex: i, 
-                        totalPackages: N, 
-                        piecesInPackage: piecesInThisPackage,
-                        packageCode: packageCode,
-                        displayPackageId: `${i}/${N}`, 
-                    });
-                }
-                return labels;
-            };
-
+            // Fetch de Órdenes desde Firebase
             useEffect(() => {
                 const unsubscribe = db.collection('orders')
-                    .where('status', '!=', 'ARCHIVADO')
+                    .where('status', 'in', ['PENDIENTE', 'EN PROCESO'])
+                    .orderBy('fechaPedido', 'desc')
                     .onSnapshot(snapshot => {
-                        const fetchedOrders = snapshot.docs.map(doc => doc.data());
-                        fetchedOrders.sort((a, b) => b.id - a.id);
+                        const fetchedOrders = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
                         setOrders(fetchedOrders);
                         setLoading(false);
                     }, error => {
-                        console.error("Error fetching orders:", error);
+                        console.error("Error al obtener órdenes:", error);
                         setLoading(false);
                     });
+
                 return () => unsubscribe();
             }, []);
-            
-            useEffect(() => {
-                if (selectedOrder) {
-                    setPackageLabels(generatePackageLabels(selectedOrder));
-                } else {
-                    setPackageLabels([]);
-                }
-            }, [selectedOrder]);
 
-            const filteredOrders = useMemo(() => {
-                if (!filterText) return orders;
-                const txt = filterText.toUpperCase();
-                return orders.filter(o => 
-                    (o.codigo && o.codigo.includes(txt)) || 
-                    (o.cliente && o.cliente.includes(txt)) ||
-                    (o.partida && o.partida.includes(txt))
-                );
-            }, [orders, filterText]);
+            // Orden seleccionada y generación de etiquetas
+            const selectedOrder = useMemo(() => orders.find(o => o.id === selectedOrderId), [orders, selectedOrderId]);
+            const packageLabels = useMemo(() => generatePackageLabels(selectedOrder), [selectedOrder]);
 
             const handlePrint = () => {
-                if(packageLabels.length === 0) return;
                 window.print();
             };
 
-            const handleArchive = async () => {
-                if(!selectedOrder) return;
-                if(window.confirm(`¿Archivar orden ${selectedOrder.codigo}?`)) {
-                    try {
-                        await db.collection('orders').doc(String(selectedOrder.id)).update({
-                            status: 'ARCHIVADO',
-                            printDate: new Date().toISOString()
-                        });
-                        setSelectedOrder(null);
-                    } catch (error) {
-                        alert("Error: " + error.message);
-                    }
-                }
-            };
-
             return (
-                <div className="flex h-screen w-full main-content">
-                    <div className="w-96 bg-slate-800 text-white flex flex-col border-r border-slate-700 shadow-xl no-print z-10 sidebar">
-                        <div className="p-4 border-b border-slate-700 bg-slate-900">
-                            <h1 className="text-xl font-bold flex items-center gap-2 text-yellow-400">
-                                <Icon name="printer" /> GENERADOR ZEBRA 6x4"
-                            </h1>
-                            <div className="mt-4 relative">
-                                <input type="text" placeholder="Buscar modelo..." value={filterText} onChange={e => setFilterText(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded p-2 pl-8 text-sm focus:border-yellow-400 focus:outline-none"/>
-                                <Icon name="search" size={14} className="absolute left-3 top-3 text-slate-500" />
-                            </div>
+                <div className="flex h-screen overflow-hidden">
+                    
+                    {/* Columna de Órdenes (Sidebar) */}
+                    <div className="no-print w-80 bg-slate-800 text-white flex flex-col">
+                        <div className="p-4 border-b border-slate-700">
+                            <h2 className="text-xl font-bold flex items-center">
+                                <Icon name="printer" size={20} className="mr-2" />
+                                Generador de Papeletas
+                            </h2>
                         </div>
-                        <div className="flex-grow overflow-y-auto p-2 space-y-2">
-                            {loading && <div className="flex justify-center p-10"><div className="loader"></div></div>}
-                            {filteredOrders.map(order => (
-                                <div key={order.id} onClick={() => setSelectedOrder(order)} className={`p-3 rounded cursor-pointer border-l-4 transition-all hover:bg-slate-700 ${selectedOrder?.id === order.id ? 'bg-slate-700 border-yellow-400 shadow-md' : 'bg-slate-800/50 border-transparent hover:border-slate-500'}`}>
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="font-bold text-lg">{order.codigo}</span>
-                                        <span className="bg-slate-900 text-xs px-2 py-0.5 rounded text-slate-300 font-mono">MQ-{order.maquina}</span>
+                        
+                        {/* Lista de Órdenes */}
+                        <div className="flex-grow overflow-y-auto p-3">
+                            {loading ? (
+                                <div className="text-center py-10 text-slate-400">Cargando órdenes...</div>
+                            ) : orders.length > 0 ? (
+                                orders.map(order => (
+                                    <div 
+                                        key={order.id}
+                                        className={`p-3 mb-2 rounded cursor-pointer transition-colors ${selectedOrderId === order.id ? 'bg-indigo-600 shadow-md' : 'bg-slate-700 hover:bg-slate-600'}`}
+                                        onClick={() => setSelectedOrderId(order.id)}
+                                    >
+                                        <div className="font-bold text-sm">{order.cliente} - {order.modelo}</div>
+                                        <div className="text-xs text-slate-300">Pedido: {order.noPedido} | ID: {order.id}</div>
+                                        <div className="text-xs text-yellow-400 mt-1">{order.progreso ? order.progreso.length : 0} Paquetes</div>
                                     </div>
-                                    <div className="flex justify-between items-end mt-2">
-                                        <span className="text-xs bg-yellow-900/30 text-yellow-200 px-1 rounded">{order.partida}</span>
-                                        <span className="text-xs font-bold">{order.totalPedido} pzs</span>
-                                    </div>
-                                </div>
-                            ))}
+                                ))
+                            ) : (
+                                <div className="text-center py-10 text-slate-400">No hay órdenes pendientes.</div>
+                            )}
                         </div>
                     </div>
-                    <div className="flex-grow bg-slate-100 flex flex-col relative overflow-auto">
-                        <div className="bg-white p-4 shadow-sm border-b flex justify-between items-center no-print header-actions sticky top-0 z-10">
-                            <div>
-                                {selectedOrder ? (
-                                    <h2 className="font-bold text-slate-700 flex items-center gap-2">ORDEN: <span className="text-black">{selectedOrder.codigo}</span><span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded-full">{packageLabels.length} etiquetas</span></h2>
-                                ) : (<h2 className="font-bold text-slate-400">Selecciona una orden</h2>)}
-                            </div>
-                            <div className="flex gap-3">
-                                {selectedOrder && (
-                                    <>
-                                        <button onClick={handleArchive} className="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded font-bold hover:bg-red-50 text-sm flex items-center gap-2"><Icon name="archive" size={16}/> ARCHIVAR</button>
-                                        <button onClick={handlePrint} className="px-5 py-2 bg-black text-white rounded font-bold hover:bg-gray-800 shadow-lg transition flex items-center gap-2"><Icon name="printer" size={18}/> IMPRIMIR</button>
-                                    </>
-                                )}
-                            </div>
+
+                    {/* Contenido Principal (Visualización de Papeletas) */}
+                    <div className="flex-grow flex flex-col">
+                        
+                        {/* Header con Botón de Imprimir */}
+                        <div className="no-print p-4 bg-white border-b border-slate-200 shadow-sm flex justify-between items-center">
+                            <h1 className="text-2xl font-bold text-slate-800">Visualización de Papeletas</h1>
+                            {packageLabels.length > 0 && (
+                                <button
+                                    onClick={handlePrint}
+                                    className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg flex items-center transition duration-200"
+                                >
+                                    <Icon name="printer" size={20} className="mr-2" />
+                                    Imprimir {packageLabels.length} Papeleta(s)
+                                </button>
+                            )}
                         </div>
+
+                        {/* Área de Visualización (devuelve las etiquetas para la impresión) */}
                         <div className="flex-grow flex flex-col items-center p-10 bg-slate-200 overflow-y-auto print-container">
                             {packageLabels.length > 0 ? (
                                 packageLabels.map((labelData, index) => (
-                                    <div key={index} className="label-wrapper mb-8 bg-white shadow-xl">
+                                    // wrapper div to control margin in screen and page-break in print
+                                    <div key={index} className="label-wrapper mb-8 p-4 bg-white rounded shadow-xl hover:shadow-2xl transition-shadow">
                                         <ProductionLabel labelData={labelData} />
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-slate-400 flex flex-col items-center mt-20 no-print">
+                                <div className="text-center text-slate-400 flex flex-col items-center mt-20">
                                     <Icon name="arrow-left-circle" size={48} className="mb-4 opacity-50"/>
-                                    <p className="text-lg font-bold">Selecciona una orden</p>
+                                    <p className="text-lg font-bold">Selecciona una orden del menú izquierdo</p>
+                                    <p className="text-sm">Para generar y visualizar sus papeletas.</p>
                                 </div>
                             )}
                         </div>
+
                     </div>
                 </div>
             );
