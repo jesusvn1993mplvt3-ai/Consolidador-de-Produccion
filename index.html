@@ -91,6 +91,7 @@
         };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const FieldValue = firebase.firestore.FieldValue; // Importamos FieldValue para serverTimestamp
 
         // ICONOS
         const Icon = ({ name, size = 18, className }) => {
@@ -127,7 +128,7 @@
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            // *** ANCHO AUMENTADO 80% (0.69 * 1.80 = 1.242) ***
+                            // ANCHO AJUSTADO
                             width: 1.242,      
                             height: 45,      
                             displayValue: false,
@@ -301,10 +302,64 @@
                 );
             }, [orders, filterText]);
 
-            const handlePrint = () => {
-                if(packageLabels.length === 0) return;
-                window.print();
+            // --- NUEVA LÓGICA DE GENERACIÓN EN LA BASE DE DATOS Y LUEGO IMPRESIÓN ---
+            const handleGenerateAndPrint = async () => {
+                if(packageLabels.length === 0 || !selectedOrder) return;
+
+                // Solo si la orden no está ya marcada como impresa o archivada
+                if (selectedOrder.status === 'IMPRESO') {
+                    if (!window.confirm(`La orden ${selectedOrder.codigo} ya fue marcada como impresa. ¿Deseas volver a imprimir?`)) {
+                        return;
+                    }
+                }
+                
+                setLoading(true);
+
+                const batch = db.batch();
+                const now = FieldValue.serverTimestamp();
+
+                // 1. Guardar cada etiqueta en la colección 'printed_labels'
+                packageLabels.forEach(labelData => {
+                    const docRef = db.collection('printed_labels').doc(labelData.packageCode);
+                    batch.set(docRef, {
+                        id: labelData.packageCode,
+                        orderId: labelData.id,
+                        packageIndex: labelData.packageIndex,
+                        totalPackages: labelData.totalPackages,
+                        codigo: labelData.codigo,
+                        partida: labelData.partida,
+                        cliente: labelData.cliente,
+                        piecesInPackage: labelData.piecesInPackage,
+                        printDate: now,
+                        status: 'IMPRESO', 
+                        // Copia de otros datos esenciales para el escaneo
+                        maquina: labelData.maquina,
+                        talla: labelData.subPiecesData && labelData.subPiecesData.length > 0 ? labelData.subPiecesData[0].talla : 'UNI', 
+                        pieza: labelData.subPiecesData && labelData.subPiecesData.length > 0 ? labelData.subPiecesData[0].pieza : 'ESTANDAR',
+                    }, { merge: true }); // Usamos merge: true por si ya existe el ID y solo queremos actualizar la fecha/estado
+                });
+                
+                try {
+                    await batch.commit();
+                    
+                    // 2. Marcar la orden principal como 'IMPRESO'
+                    await db.collection('orders').doc(String(selectedOrder.id)).update({
+                        status: 'IMPRESO',
+                        lastPrintDate: now
+                    });
+                    
+                    // 3. Imprimir
+                    window.print();
+
+                } catch (error) {
+                    console.error("Error al guardar o imprimir:", error);
+                    alert("Error al guardar los datos de las etiquetas: " + error.message);
+                } finally {
+                    setLoading(false);
+                }
             };
+            // --- FIN DE LA NUEVA LÓGICA ---
+
 
             const handleArchive = async () => {
                 if(!selectedOrder) return;
@@ -360,7 +415,13 @@
                                 {selectedOrder && (
                                     <>
                                         <button onClick={handleArchive} className="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded font-bold hover:bg-red-50 text-sm flex items-center gap-2"><Icon name="archive" size={16}/> ARCHIVAR</button>
-                                        <button onClick={handlePrint} className="px-5 py-2 bg-black text-white rounded font-bold hover:bg-gray-800 shadow-lg transition flex items-center gap-2"><Icon name="printer" size={18}/> IMPRIMIR</button>
+                                        <button 
+                                            onClick={handleGenerateAndPrint} 
+                                            className="px-5 py-2 bg-black text-white rounded font-bold hover:bg-gray-800 shadow-lg transition flex items-center gap-2" 
+                                            disabled={loading || packageLabels.length === 0}>
+                                            <Icon name="printer" size={18}/> 
+                                            {loading ? 'GENERANDO...' : 'GENERAR E IMPRIMIR'}
+                                        </button>
                                     </>
                                 )}
                             </div>
