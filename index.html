@@ -116,7 +116,8 @@
             
             const currentPackageDisplay = order.displayPackageId || '1/1';
             const piecesInPackage = order.piecesInPackage || (order.packageSize === 'VARIO' ? 'VAR' : (order.packageSize || 50));
-            const barcodeValue = order.packageCode || `${order.partida}-${order.codigo}`;
+            // *** Contenido del código de barras simplificado a Order ID y Paquete Index ***
+            const barcodeValue = order.packageCode || `${order.id}-${order.packageIndex}`; 
             const fechaEntrega = order.fechaEntrega || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX');
 
             // --- CONFIGURACIÓN OPTIMIZADA DEL CÓDIGO DE BARRAS ---
@@ -126,7 +127,8 @@
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            width: 1.38,      // 60% del ancho anterior (2.3 * 0.60)
+                            // *** ANCHO REDUCIDO AL 50% (1.38 -> 0.69) ***
+                            width: 0.69,      
                             height: 45,      
                             displayValue: false,
                             margin: 10,
@@ -250,15 +252,17 @@
                 const labels = [];
                 for (let i = 1; i <= N; i++) {
                     const piecesInThisPackage = i < N ? packageSizeValue : (totalPieces % packageSizeValue || packageSizeValue);
-                    const arrayIndex = i - 1;
-                    const packageCode = `${order.id}-${order.partida}-${order.codigo}-${i}_${N}|${arrayIndex}`;
+                    
+                    // *** GENERACIÓN DE CÓDIGO SIMPLIFICADO ***
+                    // Solo Order ID y el índice del paquete.
+                    const packageCode = `${order.id}-${i}`;
 
                     labels.push({
                         ...order,
-                        packageIndex: i, 
+                        packageIndex: i, // Nuevo campo para usar en el código simplificado
                         totalPackages: N, 
                         piecesInPackage: piecesInThisPackage,
-                        packageCode: packageCode,
+                        packageCode: packageCode, // Código simple
                         displayPackageId: `${i}/${N}`, 
                     });
                 }
