@@ -126,10 +126,10 @@
                         JsBarcode(svgRef.current, barcodeValue, {
                             format: "CODE128",
                             lineColor: "#000",
-                            width: 1.38,      // 60% del ancho anterior (2.3 * 0.60)
+                            width: 0.7,      // REDUCIDO: De 1.38 a 0.7 para hacerlo mucho mas angosto
                             height: 45,      
                             displayValue: false,
-                            margin: 10,
+                            margin: 0,       // REDUCIDO: De 10 a 0 para quitar espacio blanco lateral
                             background: "#ffffff"
                         });
                     } catch (e) { console.error("Error barcode", e); }
