@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consolidador de Producción - Certificación Manual</title>
+    <title>Consolidador de Producción - Certificación</title>
     
     <link rel="icon" href="https://raw.githubusercontent.com/jesusvn1993mplvt3-ai/CIRINEO/refs/heads/main/icon.ico">
     
@@ -27,6 +27,7 @@
         }
 
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        .loader.border-white { border-top-color: white; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -64,70 +65,116 @@
             return <div ref={containerRef} className="inline-block" style={{ width: size, height: size }}></div>;
         };
 
-        // --- COMPONENTE PRINCIPAL DEL CONSOLIDADOR (MANUAL) ---
-        const ConsolidatorManualChecker = () => {
+        // --- COMPONENTE PRINCIPAL DEL CONSOLIDADOR ---
+        const ProductionConsolidator = () => {
             const [scanInput, setScanInput] = useState('');
-            const [scanStatus, setScanStatus] = useState({ message: 'Ingrese el código de paquete y presione Certificar.', type: 'info' });
-            const [lastScan, setLastScan] = useState(null);
+            const [scanStatus, setScanStatus] = useState({ message: 'Cargando paquetes pendientes...', type: 'info' });
+            const [lastCertified, setLastCertified] = useState(null);
             const [certifiedCount, setCertifiedCount] = useState(0); 
             const [isProcessing, setIsProcessing] = useState(false);
+            const [pendingPackages, setPendingPackages] = useState([]); // Lista de paquetes listos para certificar
             const inputRef = useRef(null);
             
-            // Función para procesar y certificar el código de barras
-            const processCodeForCertification = async (e) => {
-                e.preventDefault();
-                
-                const rawCode = scanInput.trim();
-                if (!rawCode) return;
+            // --- Carga de paquetes pendientes en tiempo real ---
+            useEffect(() => {
+                setScanStatus({ message: 'Cargando paquetes pendientes...', type: 'info' });
+                // Filtra por documentos cuyo status NO sea 'CERTIFICADO'
+                const unsubscribe = db.collection('registro_produccion')
+                    .where('status', '!=', 'CERTIFICADO')
+                    .orderBy('status') // Necesario si se usa un filtro de desigualdad
+                    .onSnapshot(snapshot => {
+                        const packages = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        })).filter(p => p.status !== 'CERTIFICADO'); // Filtrado adicional por si acaso el orderBy falla
 
-                const normalizedCode = rawCode.toUpperCase().replace(/'/g, '-').replace(/\?/g, '_');
-                setScanStatus({ message: `Buscando código: ${normalizedCode}...`, type: 'info' });
+                        // Ordenar por antigüedad (si tienen campo 'fecha' - timestamp del escaneo)
+                        packages.sort((a, b) => (a.fecha?.seconds || 0) - (b.fecha?.seconds || 0)); 
+                        
+                        setPendingPackages(packages);
+                        setScanStatus({ message: `Mostrando ${packages.length} paquetes pendientes de certificar.`, type: 'info' });
+                    }, error => {
+                        setScanStatus({ message: `Error al cargar datos: ${error.message}`, type: 'error' });
+                    });
+
+                return () => unsubscribe();
+            }, []);
+
+            // --- Función Unificada de Certificación ---
+            const processCertification = async (docId = null, packageCode = null, isManual = false) => {
+                if (isProcessing) return;
                 setIsProcessing(true);
-                setScanInput(''); // Limpia el input para el siguiente escaneo
                 
+                const codeToDisplay = packageCode || scanInput.trim().toUpperCase().replace(/'/g, '-').replace(/\?/g, '_');
+                setScanStatus({ message: `Buscando y certificando: ${codeToDisplay}...`, type: 'info' });
+                
+                let docRef;
+                let docData;
+
                 try {
-                    // 1. Buscar el registro de producción en la base de datos
-                    const snapshot = await db.collection('registro_produccion')
-                        .where('codigo_paquete', '==', normalizedCode)
-                        .get();
+                    // 1. Obtener la referencia del documento y sus datos
+                    if (docId) {
+                        // Certificación desde la lista (por ID de documento)
+                        docRef = db.collection('registro_produccion').doc(docId);
+                        const docSnapshot = await docRef.get();
+                        if (!docSnapshot.exists) {
+                            throw new Error('Paquete no encontrado.');
+                        }
+                        docData = docSnapshot.data();
+                    } else if (isManual) {
+                        // Certificación manual (por código de paquete)
+                        const snapshot = await db.collection('registro_produccion')
+                            .where('codigo_paquete', '==', codeToDisplay)
+                            .get();
 
-                    if (snapshot.empty) {
-                        setScanStatus({ message: `ERROR: Código ${normalizedCode} no encontrado en Producción.`, type: 'error' });
-                        return;
-                    }
-
-                    const doc = snapshot.docs[0];
-                    const docData = doc.data();
-
-                    // 2. Verificar el estado actual del paquete
-                    if (docData.status === 'CERTIFICADO') {
-                        setScanStatus({ message: `ALERTA: Paquete ${normalizedCode} ya fue CERTIFICADO.`, type: 'warning' });
-                        setLastScan({ ...docData, status: 'CERTIFICADO', fecha_certificacion: 'DUPLICADO' });
+                        if (snapshot.empty) {
+                            setScanStatus({ message: `ERROR: Código ${codeToDisplay} no encontrado en Producción.`, type: 'error' });
+                            return;
+                        }
+                        docRef = snapshot.docs[0].ref;
+                        docData = snapshot.docs[0].data();
+                        
+                        setScanInput(''); // Limpiar input después de la búsqueda
+                    } else {
                         return;
                     }
                     
-                    // 3. ¡CERTIFICAR EL PAQUETE! (ACTUALIZAR)
-                    await db.collection('registro_produccion').doc(doc.id).update({
+                    // 2. Verificar si ya está certificado
+                    if (docData.status === 'CERTIFICADO') {
+                        setScanStatus({ message: `ALERTA: Paquete ${docData.codigo_paquete} ya fue CERTIFICADO.`, type: 'warning' });
+                        setLastCertified({ ...docData, status: 'CERTIFICADO', fecha_certificacion: 'DUPLICADO' });
+                        return;
+                    }
+
+                    // 3. REALIZAR LA CERTIFICACIÓN (UPDATE)
+                    await docRef.update({
                         status: 'CERTIFICADO',
                         fecha_certificacion: FieldValue.serverTimestamp(),
-                        certificador: 'Consolidador-Manual', 
+                        certificador: isManual ? 'Consolidador-Manual' : 'Consolidador-Lista', 
                     });
 
-                    // 4. Actualizar estado de la UI
-                    setLastScan({ 
+                    // 4. Actualizar la UI
+                    setLastCertified({ 
                         ...docData, 
                         status: 'CERTIFICADO', 
                         fecha_certificacion: new Date().toLocaleTimeString('es-MX') 
                     });
                     setCertifiedCount(prev => prev + 1);
-                    setScanStatus({ message: `ÉXITO: Paquete ${normalizedCode} CERTIFICADO correctamente.`, type: 'success' });
+                    setScanStatus({ message: `ÉXITO: Paquete ${docData.codigo_paquete} CERTIFICADO.`, type: 'success' });
 
                 } catch (error) {
-                    console.error("Error al certificar:", error);
-                    setScanStatus({ message: `ERROR CRÍTICO: Falló la conexión/DB.`, type: 'error' });
+                    console.error("Error al certificar:", error.message, error);
+                    setScanStatus({ message: `ERROR CRÍTICO: ${error.message || 'Falló la conexión/DB.'}`, type: 'error' });
                 } finally {
                     setIsProcessing(false);
-                    if (inputRef.current) inputRef.current.focus(); // Devuelve el foco al input
+                    if (isManual && inputRef.current) inputRef.current.focus(); 
+                }
+            };
+            
+            const handleManualSubmit = (e) => {
+                e.preventDefault();
+                if (scanInput.trim()) {
+                    processCertification(null, null, true);
                 }
             };
 
@@ -140,88 +187,132 @@
 
             return (
                 <div className="p-4 lg:p-10 w-full flex flex-col items-center">
-                    <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden">
+                    <div className="w-full max-w-6xl bg-white rounded-xl shadow-2xl overflow-hidden">
                         
                         {/* Header */}
                         <div className="p-5 bg-indigo-700 text-white flex justify-between items-center">
                             <h1 className="text-2xl font-bold flex items-center gap-3">
-                                <Icon name="shield-check" size={28}/> CERTIFICACIÓN MANUAL
+                                <Icon name="shield-check" size={28}/> CONSOLIDADOR DE CERTIFICACIÓN
                             </h1>
                             <span className="text-lg font-mono bg-indigo-900 px-3 py-1 rounded">
                                 Certificados Hoy: {certifiedCount}
                             </span>
                         </div>
                         
-                        {/* Body */}
-                        <div className="p-6">
+                        {/* Body - Dos columnas */}
+                        <div className="flex flex-col lg:flex-row">
                             
-                            {/* FORMULARIO DE ENTRADA */}
-                            <form onSubmit={processCodeForCertification} className="mb-6 space-y-4">
-                                <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
-                                    <Icon name="tag" size={20}/> Código de Barras
+                            {/* Columna Izquierda: Paquetes Pendientes */}
+                            <div className="w-full lg:w-3/5 p-6 border-r border-slate-200">
+                                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                    <Icon name="list-checks" size={20}/> Paquetes Pendientes ({pendingPackages.length})
                                 </h2>
-                                <input 
-                                    ref={inputRef}
-                                    type="text" 
-                                    value={scanInput}
-                                    onChange={e => setScanInput(e.target.value)}
-                                    placeholder="Ingrese o pegue el código de paquete aquí"
-                                    required
-                                    className="w-full border-2 border-slate-300 rounded-lg p-3 text-center text-lg font-mono focus:border-indigo-500 focus:outline-none transition"
-                                    autoFocus
-                                />
-                                <button 
-                                    type="submit"
-                                    disabled={isProcessing || !scanInput.trim()}
-                                    className={`w-full py-3 rounded-lg font-bold text-white transition shadow-lg flex items-center justify-center gap-3 text-lg ${isProcessing || !scanInput.trim() ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-                                >
-                                    {isProcessing ? (
-                                        <>
-                                            <div className="loader w-5 h-5 border-white"></div>
-                                            Procesando...
-                                        </>
+
+                                <div className="h-[400px] overflow-y-auto pr-2">
+                                    {pendingPackages.length === 0 ? (
+                                        <p className="text-center text-slate-500 italic p-10 bg-green-50 rounded-lg border border-green-200">
+                                            <Icon name="check-circle" size={32} className="text-green-600 mb-2"/>
+                                            <span className="block font-bold">¡TODO AL DÍA!</span>
+                                            No hay paquetes de producción pendientes de certificar.
+                                        </p>
                                     ) : (
-                                        <>
-                                            <Icon name="check-circle" size={22}/>
-                                            CERTIFICAR PAQUETE
-                                        </>
+                                        <ul className="space-y-3">
+                                            {pendingPackages.map(pkg => (
+                                                <li key={pkg.id} className="p-3 bg-white border border-slate-300 rounded-lg shadow-sm flex items-center justify-between transition hover:bg-slate-50">
+                                                    <div>
+                                                        <p className="font-mono font-extrabold text-lg text-indigo-700">{pkg.codigo_paquete}</p>
+                                                        <p className="text-xs text-slate-500">
+                                                            {pkg.modelo} / Partida: {pkg.partida} - Pzas: {pkg.piezas_en_paquete}
+                                                        </p>
+                                                        {pkg.fecha && (
+                                                            <p className="text-xs text-slate-400 mt-1">Escaneado: {new Date(pkg.fecha.seconds * 1000).toLocaleDateString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                        )}
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => processCertification(pkg.id, pkg.codigo_paquete, false)}
+                                                        disabled={isProcessing}
+                                                        className={`ml-4 px-4 py-2 rounded-lg font-bold text-white transition flex items-center gap-2 text-sm ${isProcessing ? 'bg-green-400' : 'bg-green-600 hover:bg-green-700'}`}
+                                                    >
+                                                        <Icon name="check" size={16}/> Certificar
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     )}
-                                </button>
-                                <div className={`p-3 rounded-lg text-sm font-medium border text-center ${statusClasses[scanStatus.type]}`}>
+                                </div>
+                            </div>
+                            
+                            {/* Columna Derecha: Entrada Manual y Último Escaneo */}
+                            <div className="w-full lg:w-2/5 p-6">
+                                
+                                {/* Formulario Manual */}
+                                <form onSubmit={handleManualSubmit} className="mb-6 space-y-3">
+                                    <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2 mb-2">
+                                        <Icon name="keyboard" size={20}/> Entrada Manual
+                                    </h2>
+                                    <input 
+                                        ref={inputRef}
+                                        type="text" 
+                                        value={scanInput}
+                                        onChange={e => setScanInput(e.target.value)}
+                                        placeholder="Ingrese el código aquí (o lector USB)"
+                                        required
+                                        className="w-full border-2 border-slate-300 rounded-lg p-3 text-center text-lg font-mono focus:border-indigo-500 focus:outline-none transition"
+                                    />
+                                    <button 
+                                        type="submit"
+                                        disabled={isProcessing || !scanInput.trim()}
+                                        className={`w-full py-3 rounded-lg font-bold text-white transition shadow-lg flex items-center justify-center gap-3 text-lg ${isProcessing || !scanInput.trim() ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                    >
+                                        {isProcessing ? (
+                                            <>
+                                                <div className="loader w-5 h-5 border-white"></div>
+                                                Procesando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Icon name="check-circle" size={22}/>
+                                                CERTIFICAR MANUAL
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+
+                                {/* Estatus y Último Paquete */}
+                                <div className={`p-3 rounded-lg text-sm font-medium border text-center mb-6 ${statusClasses[scanStatus.type]}`}>
                                     {scanStatus.message}
                                 </div>
-                            </form>
-                            
-                            {/* Información del Último Escaneo */}
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                    <Icon name="package-check" size={20}/> Último Paquete Verificado
-                                </h2>
+                                
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                        <Icon name="package-check" size={20}/> Último Paquete Verificado
+                                    </h2>
 
-                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg shadow-inner">
-                                    {lastScan ? (
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                                                <span className="text-xs font-bold text-slate-500 uppercase">Código Paquete</span>
-                                                <span className="text-lg font-mono font-extrabold text-indigo-700">{lastScan.codigo_paquete}</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div><span className="text-xs font-bold text-slate-500 block">Modelo / Partida</span><span className="font-bold text-slate-800">{lastScan.modelo} / {lastScan.partida}</span></div>
-                                                <div><span className="text-xs font-bold text-slate-500 block">Pzs en Paquete</span><span className="font-bold text-slate-800">{lastScan.piezas_en_paquete}</span></div>
-                                                <div><span className="text-xs font-bold text-slate-500 block">Tejedor(a)</span><span className="font-bold text-slate-800">{lastScan.tejedor || 'N/A'}</span></div>
-                                                <div><span className="text-xs font-bold text-slate-500 block">Fecha Verif.</span><span className="font-bold text-slate-800 text-sm">{lastScan.fecha_certificacion || 'Pendiente'}</span></div>
-                                            </div>
+                                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg shadow-inner">
+                                        {lastCertified ? (
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase">Código Paquete</span>
+                                                    <span className="text-lg font-mono font-extrabold text-indigo-700">{lastCertified.codigo_paquete}</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div><span className="text-xs font-bold text-slate-500 block">Modelo / Partida</span><span className="font-bold text-slate-800">{lastCertified.modelo} / {lastCertified.partida}</span></div>
+                                                    <div><span className="text-xs font-bold text-slate-500 block">Pzs en Paquete</span><span className="font-bold text-slate-800">{lastCertified.piezas_en_paquete}</span></div>
+                                                    <div><span className="text-xs font-bold text-slate-500 block">Tejedor(a)</span><span className="font-bold text-slate-800">{lastCertified.tejedor || 'N/A'}</span></div>
+                                                    <div><span className="text-xs font-bold text-slate-500 block">Hora Certificación</span><span className="font-bold text-slate-800 text-sm">{lastCertified.fecha_certificacion || '---'}</span></div>
+                                                </div>
 
-                                            <div className={`mt-3 p-3 rounded-lg text-center font-bold text-white shadow-md ${lastScan.status === 'CERTIFICADO' ? 'bg-green-600' : 'bg-red-600'}`}>
-                                                ESTADO: {lastScan.status || 'PRODUCCIÓN'}
-                                            </div>
+                                                <div className={`mt-3 p-3 rounded-lg text-center font-bold text-white shadow-md ${lastCertified.status === 'CERTIFICADO' ? 'bg-green-600' : 'bg-red-600'}`}>
+                                                    ESTADO: {lastCertified.status || 'PRODUCCIÓN'}
+                                                </div>
 
-                                        </div>
-                                    ) : (
-                                        <p className="text-center text-slate-500 italic p-6">
-                                            Verifique el primer paquete para ver su información aquí.
-                                        </p>
-                                    )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-slate-500 italic p-6">
+                                                Verifique el primer paquete para ver su información aquí.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -231,7 +322,7 @@
             );
         };
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<ConsolidatorManualChecker />);
+        root.render(<ProductionConsolidator />);
     </script>
 </body>
 </html>
