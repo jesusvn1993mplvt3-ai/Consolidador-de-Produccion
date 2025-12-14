@@ -1,1 +1,1 @@
-https://jesusvn1993mplvt3-ai.github.io/GENERADOR-DE-PAPELETAS/
+https://jesusvn1993mplvt3-ai.github.io/Consolidador-de-Produccion/
